@@ -25,7 +25,7 @@ parser.add_argument(
 parser.add_argument(
     '--gait-only',
     action='store_true',
-    default=True,
+    default=False,
     help='if False multilabel of gait and chorea mode and if True gait only mode')
 
 parser.add_argument(
@@ -37,13 +37,13 @@ parser.add_argument(
 parser.add_argument(
     '--initialize-model',
     action='store_true',
-    default=False,
+    default=True,
     help='if true training and validation of the model is applied')
 
 parser.add_argument(
     '--training-mode',
     action='store_true',
-    default=False,
+    default=True,
     help='if true training of the model is applied')
 
 parser.add_argument(
@@ -99,9 +99,17 @@ RAW_DATA_AND_LABELS_DIR = '/home/dafnas1/datasets/hd_dataset/lab_geneactive/sync
 #RAW_DATA_AND_LABELS_DIR = '/mlwell-data2/dafna/PD_data_and_labels/Data'
 #PD_RAW_LABELS_DIR = '/mlwell-data2/dafna/PD_data_and_labels/labels'
 #RAW_DATA_AND_LABELS_DIR = '/mlwell-data2/dafna/daily_living_data_array/PACE'
-PROCESSED_DATA_DIR ='/mlwell-data2/dafna/daily_living_data_array/data_ready'
-OUTPUT_DIR = '/home/dafnas1/my_repo/hd_gait_detection_with_SSL/model_outputs'
-VIZUALIZE_DIR = '/home/dafnas1/my_repo/hd_gait_detection_with_SSL/model_outputs/results_visualization/multiclass_hd_only/multiclass_separated_labels'
+curr_dir = os.getcwd()
+
+PROCESSED_DATA_DIR = os.path.join(curr_dir, 'data_ready')
+os.makedirs(PROCESSED_DATA_DIR, exist_ok=True)
+
+OUTPUT_DIR = os.path.join(curr_dir, 'model_outputs')
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+VIZUALIZE_DIR = os.path.join(curr_dir, 'model_outputs', 'results_visualization')
+os.makedirs(VIZUALIZE_DIR, exist_ok=True)
+
 if args.cohort == 'pd_owly':
     SRC_SAMPLE_RATE = int(25) #hz
 else:
@@ -151,8 +159,8 @@ class GaitChoreaBaseEstimator(BaseEstimator, RegressorMixin):
                        train_loader, 
                        val_loader, 
                        self.device, 
-                       model_type=model_type,
-                       gait_only=GAIT_ONLY,
+                       model_type=args.model_type,
+                       gait_only=args.gait_only,
                        class_weights=None, 
                        weights_path=self.weights_path,
                        wandb_flag=False, 
@@ -173,7 +181,7 @@ class GaitChoreaBaseEstimator(BaseEstimator, RegressorMixin):
         return y_logits
 
     def _get_model(self, pretrained):
-        return sslmodel.get_sslnet(tag=self.repo_tag, pretrained=pretrained, num_classes=7,model_type=model_type,padding_type=padding_type)
+        return sslmodel.get_sslnet(tag=self.repo_tag, pretrained=pretrained, num_classes=7,model_type=args.model_type,padding_type=args.padding_type)
     
 
 def train_multiclass(X_train, y_train, X_test=None, y_test=None, batch_size=64, device='cpu', weights_path='', skip_train=False):
@@ -198,6 +206,8 @@ def train_multiclass(X_train, y_train, X_test=None, y_test=None, batch_size=64, 
         # print(f'Test gait_acc: {test_acc_gait},  Test chorea_acc: {test_acc_chorea}')
         wandb_log({'init_test_acc_gait':test_acc_gait, 'init_test_acc_chorea':test_acc_chorea})
 
+    return estimators
+
 def groupkfold(groups, n_splits=5):
     """ Like GroupKFold but ordered """
 
@@ -217,8 +227,8 @@ def wandb_log(dict_to_log):
 
 def predict_boosting(x,estimators):
     y_pred = estimators[0].predict(x)
-    for estimator in estimators[1:]:
-        y_pred = update_y_pred(y_pred,estimator.predict(x))
+    # for estimator in estimators[1:]:
+    #     y_pred = update_y_pred(y_pred,estimator.predict(x))
     return y_pred
 
 def get_valid_chorea(y_train):
@@ -398,15 +408,14 @@ def main():
         #FILE_PREFIX = 'classification_test' #segmentation_val' or'segmentation_without_edges_overlap' or 'segmentation_triple_wind_no_shift'
         
         gait_only_prefix = "_gait_only" if args.gait_only else ""
-        OUTPUT_DIR = '/home/dafnas1/my_repo/hd_gait_detection_with_SSL/model_outputs/output_files'
-        #UTPUT_DIR = '/mlwell-data2/dafna/ssl_gait_detection/model_outputs/output_files'
-
-        
+        curr_dir = os.getcwd()   
+        OUTPUT_DIR = os.path.join(curr_dir, 'model_outputs', 'output_files')
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
         
         ## for in lab
         if args.data_type == 'in_lab':
             if args.cohort == 'hd':
-                input_data_dir = '/home/dafnas1/my_repo/hd_gait_detection_with_SSL/data_ready' # /mlwell-data2/dafna/in_lab_data_array or /home/dafnas1/my_repo/hd_gait_detection_with_SSL/data_ready
+                input_data_dir = PROCESSED_DATA_DIR # /mlwell-data2/dafna/in_lab_data_array or /home/dafnas1/my_repo/hd_gait_detection_with_SSL/data_ready
                 INP_PREFIX = 'segmentation_triple_wind_no_shift' #or 'check_labels'
                 #segmentation_labels' or'segmentation_without_edges_overlap' or 'segmentation_triple_wind_no_shift' or 'classification_test' or 'daily_living_classification_full_files' or 'classification_hc'
                 #as in the output file of preditions
@@ -472,25 +481,20 @@ def main():
                 INP_PREFIX = 'classification_test' 
                 OUT_PREFIX = 'vanila_hc_model_on_hd' 
                 EXTERNAL_MODEL_FILE = '/home/dafnas1/my_repo/hd_gait_detection_with_SSL/model_outputs/output_files/multiclass_weights_hc_only_boosting_classification_7_4_24_chorea_0_only_gait_only.pt'
-                
+             
+        VIZUALIZE_DIR = os.path.join(curr_dir, 'model_outputs', 'results_visualization', OUT_PREFIX+gait_only_prefix+'_'+ args.cohort)
+        os.makedirs(VIZUALIZE_DIR, exist_ok=True)
 
-        VIZUALIZE_DIR = f'/home/dafnas1/my_repo/hd_gait_detection_with_SSL/model_outputs/results_visualization/boosting/{OUT_PREFIX}'+gait_only_prefix+'_'+ args.cohort
         n_estimators = 0
         learning_rate = 0.5
 
-        if not os.path.exists(VIZUALIZE_DIR):
-            os.makedirs(VIZUALIZE_DIR)
-            print(f"Directory '{VIZUALIZE_DIR}' created.")
-        else:
-            print(f"Directory '{VIZUALIZE_DIR}' already exists.")
         if args.training_mode:
             # if train in - lab data weights_path=weights_path if not load EXTERNAL_MODEL_FILE
             weights_path = os.path.join(OUTPUT_DIR,f'multiclass_weights_{args.cohort}_only_boosting_{OUT_PREFIX}'+gait_only_prefix+'.pt')
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             num_class = 10
             
-            
-            input_file_name = f'windows_input_to_multiclass_model_{args.cohort}_only_{INP_PREFIX}.npz'
+            input_file_name = f'windows_input_to_multiclass_model_{args.cohort}_only_{args.run_suffix}.npz'
             print("start loading input file")
             input_file = np.load(os.path.join(input_data_dir,input_file_name))
             print("done loading input file")
@@ -571,7 +575,7 @@ def main():
                     
                 test_acc_gait, test_acc_chorea = sslmodel.calc_gait_and_chorea_acc(torch.Tensor(y_test), torch.Tensor(y_test_pred))
                 fold_index = len(gait_predictions_all_folds)
-                evaluation_func.generate_confusion_matrix_per_chorea_lvl(gait_predictions, gait_labels, chorea_predictions, chorea_labels, valid_chorea, valid_gait, fold_index)
+                evaluation_func.generate_confusion_matrix_per_chorea_lvl(gait_predictions, gait_labels, chorea_predictions, chorea_labels, valid_chorea, valid_gait, fold_index, args.model_type)
                 
                 gait_predictions_all_folds.append(gait_predictions)
                 gait_predictions_logits_all_folds.append(gait_predictions_logits)
@@ -608,13 +612,14 @@ def main():
             valid_chorea_all_folds = np.concatenate(valid_chorea_all_folds)
 
             if True:
-            evaluation_func.generate_confusion_matrix_per_chorea_lvl(gait_predictions_all_folds, 
+                evaluation_func.generate_confusion_matrix_per_chorea_lvl(gait_predictions_all_folds, 
                                                     gait_labels_all_folds, 
                                                     chorea_predictions_all_folds, 
                                                     chorea_labels_all_folds, 
                                                     valid_chorea_all_folds, 
                                                     valid_gait_all_folds,
-                                                    fold_index='all')
+                                                    fold_index='all',
+                                                    model_type = args.model_type)
         
 
             np.savez(os.path.join(OUTPUT_DIR, f'multiclass_separated_labels_predictions_and_logits_with_true_labels_and_subjects_{COHORT}_only_boosting_{OUT_PREFIX}'+gait_only_prefix+'.npz'),
@@ -629,7 +634,7 @@ def main():
                         win_subjects=win_subjects, 
                         cv_test_idxs_all_folds=cv_test_idxs_all_folds)
 
-        if args.evaluation_mode:
+        if args.eval_mode:
             # loading the output file to evaluate the results without training
             output_file = np.load(os.path.join(OUTPUT_DIR, f'multiclass_separated_labels_predictions_and_logits_with_true_labels_and_subjects_{COHORT}_only_boosting_{OUT_PREFIX}'+gait_only_prefix+'.npz'),allow_pickle=True)
             gait_predictions_all_folds = output_file['gait_predictions_all_folds'],
@@ -718,6 +723,7 @@ def main():
                                                 valid_gait=valid_gait_all_folds[0],
                                                 valid_chorea=valid_chorea_all_folds[0],
                                                 chorea_labels=chorea_labels_all_folds[0],
+                                                model_type=args.model_type,
                                                 analysis_type='per_pixel')
             
             scores_file = os.path.join('/home/dafnas1/my_repo/hd_gait_detection_with_SSL/model_outputs','scores.json')
@@ -742,6 +748,7 @@ def main():
                                                     valid_chorea_all_folds[0],
                                                     valid_gait_all_folds[0], 
                                                     fold_index='all',
+                                                    model_type = args.model_type,
                                                     analysis_type='per_pixel')
 
             all_recall_dict = {}
@@ -756,6 +763,7 @@ def main():
                                                         valid_chorea_all_folds[0][:,part_start:part_end],
                                                         valid_gait_all_folds[0][:,part_start:part_end], 
                                                         fold_index='all',
+                                                        model_type = arg.model_type,
                                                         analysis_type='per_pixel',
                                                         prefix=f'_part_{i}')
                 all_recall_dict.update(recall_dict)
@@ -780,6 +788,7 @@ def main():
                                                     valid_chorea_all_folds[0],
                                                     valid_gait_all_folds[0], 
                                                     fold_index='all',
+                                                    model_type = args.model_type,
                                                     analysis_type='per_pixel')
             ipdb.set_trace()
             

@@ -1,3 +1,19 @@
+import numpy as np
+import seaborn as sns
+import torch
+from sklearn import metrics
+import matplotlib.pyplot as plt
+import json
+import ipdb
+import os
+from sklearn.metrics import roc_curve
+from train_hd_ssl import windowing
+
+
+curr_dir = os.getcwd()
+VIZUALIZE_DIR = os.path.join(curr_dir, 'model_outputs', 'results_visualization')
+os.makedirs(VIZUALIZE_DIR, exist_ok=True)
+
 def confusion_matrix(labels, predictions, prefix1='', prefix2='', output_dir=None):
     if len(labels) == 0:
         return
@@ -20,8 +36,6 @@ def confusion_matrix(labels, predictions, prefix1='', prefix2='', output_dir=Non
     ax.set_xticklabels(class_labels, fontsize=16, ha="center")
     ax.set_yticklabels(class_labels, fontsize=16, va="center") 
     
-    
-
     plt.xlabel("Predicted",{"fontsize":16})
     plt.ylabel("True",{"fontsize":16})
     plt.title(f"Confusion Matrix Recall:{recall:.2f},Precision:{precision:.2f},F1:{f1_score:.2f}")
@@ -30,7 +44,7 @@ def confusion_matrix(labels, predictions, prefix1='', prefix2='', output_dir=Non
     plt.close('all')
     return recall
 
-def generate_confusion_matrix_per_chorea_lvl(gait_predictions, gait_labels, chorea_predictions, chorea_labels, valid_chorea, valid_gait, fold_index,analysis_type='per_pixel', prefix=''):
+def generate_confusion_matrix_per_chorea_lvl(gait_predictions, gait_labels, chorea_predictions, chorea_labels, valid_chorea, valid_gait, fold_index, model_type, analysis_type='per_pixel', prefix=''):
 
     if model_type == 'segmentation':
         if analysis_type == 'per_window':
@@ -117,7 +131,7 @@ def auc_and_ci(labels,probs):
         pass
     return theta, ci
 
-def auc_and_ci_per_chorea_lvl(gait_logits, gait_labels, chorea_labels, valid_chorea, valid_gait,analysis_type='per_pixel'):
+def auc_and_ci_per_chorea_lvl(gait_logits, gait_labels, chorea_labels, valid_chorea, valid_gait, model_type, analysis_type='per_pixel'):
     gait_logits_exp = np.exp(gait_logits)
     if model_type == 'segmentation':
         gait_prob = gait_logits_exp[:,1,:] / np.sum(gait_logits_exp, axis=1)
@@ -190,19 +204,19 @@ def _update_dict_res(res_dict, key, labels, prob):
                      }
 
     def update_scores_file(scores_file, new_config_name, new_scores):
-    try:
-        # Load existing scores from file
-        with open(scores_file, 'r') as f:
-            existing_scores = json.load(f)
-    except FileNotFoundError:
-        existing_scores = {}
+        try:
+            # Load existing scores from file
+            with open(scores_file, 'r') as f:
+                existing_scores = json.load(f)
+        except FileNotFoundError:
+            existing_scores = {}
 
-    # Update existing scores with new configuration
-    existing_scores[new_config_name] = new_scores
+        # Update existing scores with new configuration
+        existing_scores[new_config_name] = new_scores
 
-    # Save updated scores back to the file
-    with open(scores_file, 'w') as f:
-        json.dump(existing_scores, f, indent=4)
+        # Save updated scores back to the file
+        with open(scores_file, 'w') as f:
+            json.dump(existing_scores, f, indent=4)
 
 def find_optimal_threshold_roc(pred_probs, true_labels,subject_name,plot_roc=False,output_dir=None):
     fpr, tpr, thresholds = roc_curve(true_labels, pred_probs)
@@ -230,10 +244,10 @@ def find_optimal_threshold_roc(pred_probs, true_labels,subject_name,plot_roc=Fal
 def plot_curves(labels, probs):
     fpr, tpr, _ = metrics.roc_curve(labels, probs)
     precision, recall, _ = metrics.precision_recall_curve(labels, probs)
-    np.save(os.path.join('/home/dafnas1/my_repo/hd_gait_detection_with_SSL/model_outputs/final_graphs/pd_curves',f'fpr_{OUT_PREFIX}.npy'),fpr)
-    np.save(os.path.join('/home/dafnas1/my_repo/hd_gait_detection_with_SSL/model_outputs/final_graphs/pd_curves',f'tpr_{OUT_PREFIX}.npy'),tpr)
-    np.save(os.path.join('/home/dafnas1/my_repo/hd_gait_detection_with_SSL/model_outputs/final_graphs/pd_curves',f'precision_{OUT_PREFIX}.npy'),precision)
-    np.save(os.path.join('/home/dafnas1/my_repo/hd_gait_detection_with_SSL/model_outputs/final_graphs/pd_curves',f'recall_{OUT_PREFIX}.npy'),recall)
+    np.save(os.path.join(VIZUALIZE_DIR,f'fpr.npy'),fpr)
+    np.save(os.path.join(VIZUALIZE_DIR,f'tpr.npy'),tpr)
+    np.save(os.path.join(VIZUALIZE_DIR,f'precision.npy'),precision)
+    np.save(os.path.join(VIZUALIZE_DIR,f'recall.npy'),recall)
 
     ipdb.set_trace()
     plt.figure()

@@ -19,7 +19,7 @@ import segmentation_model
 verbose = False
 wandb_flag = False
 torch_cache_path = Path(__file__).parent / 'torch_hub_cache'
-task = 'classification'  # 'classification' or 'segmentation'
+task = 'segmentation'  # 'classification' or 'segmentation'
 
 
 class RandomSwitchAxis:

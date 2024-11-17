@@ -395,14 +395,10 @@ def main():
             # res['arr_7'] = res['win_video_time_all_sub']
     if args.initialize_model:
 
-        data_type = 'in_lab' # 'in_lab' or 'daily_living'  #pd without fine-tuning is  daily living and with is in-lab, vanila is under daily-living
-        model_type = 'segmentation' # 'classification' or 'segmentation' or 'vanila'
-        padding_type = 'triple_wind' # 'no_padding' or 'triple_wind' or 'without_edges'
+        model_type = args.model_type # 'classification' or 'segmentation' or 'vanila'
         # !!!!remember to change segmentation/classifiction also in sslmodel.py !!!!!
-        COHORT = 'hd' # hd or hc or pd_owly or hd_and_pd_train
-        training_cohort = False #'hd_and_pd_train' 
+        COHORT = args.cohort # hd or hc or pd_owly or hd_and_pd_train
         args.dataset_hd = 'iwear' # pace or iwear
-        # as in the data file feom the preprocessing step
         
         #'segmentation_without_edges_overlap_final_1_4_24' #'segmentation_triple_wind_no_shift_7_4_24'
         #FILE_PREFIX = 'classification_test' #segmentation_val' or'segmentation_without_edges_overlap' or 'segmentation_triple_wind_no_shift'
@@ -494,7 +490,7 @@ def main():
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             num_class = 10
             
-            input_file_name = f'windows_input_to_multiclass_model_{args.cohort}_only_{args.run_suffix}.npz'
+            input_file_name = f'windows_input_to_multiclass_model_{args.cohort}_only_{INP_PREFIX}.npz'
             print("start loading input file")
             input_file = np.load(os.path.join(input_data_dir,input_file_name))
             print("done loading input file")
@@ -506,7 +502,7 @@ def main():
             if args.model_type in ['classification', 'vanila']:
                 win_labels = input_file['gait_label_chorea_comb']
                 one_hot_labels = np.zeros((len(win_labels), num_class+2), dtype=int) # adding two extra dummies for no chorea
-                one_hot_labels[np.arange(len(win_labels)), win_labels.squeeze().astype(int)] = 1
+                one_hot_labels[np.arange(len(win_labels)), np.round(win_labels).squeeze().astype(int)] = 1
                 win_labels_data = one_hot_labels
             elif args.model_type == 'segmentation':
                 win_chorea = input_file['win_chorea_all_sub']

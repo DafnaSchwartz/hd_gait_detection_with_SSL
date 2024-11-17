@@ -8,6 +8,7 @@ import ipdb
 import os
 from sklearn.metrics import roc_curve
 from train_hd_ssl import windowing
+from sklearn.metrics import confusion_matrix, classification_report
 
 
 curr_dir = os.getcwd()
@@ -55,16 +56,17 @@ def generate_confusion_matrix_per_chorea_lvl(gait_predictions, gait_labels, chor
             gait_predictions = gait_predictions.flatten()[valid_gait_ind]
             gait_labels_ind = gait_labels.flatten()[valid_gait_ind]
             chorea_labels_ind = chorea_labels.flatten()[valid_gait_ind]
-            valid_chorea = valid_chorea.flatten()[valid_gait_ind]
+            valid_chorea1 = valid_chorea.flatten()[valid_gait_ind]
     else:
         gait_labels_ind = torch.argmax(gait_labels, dim=-1)
         chorea_labels_ind = torch.argmax(chorea_labels, dim=-1)
+        valid_chorea1 = valid_chorea
     recall_dict = {}
     for is_valid in [0, 1]:
-        valid_ind = np.where(valid_chorea == is_valid)[0]
+        valid_ind = np.where(valid_chorea1 == is_valid)[0]
         if is_valid:
             for chorea_level in np.unique(chorea_labels_ind):
-                indices = np.where((chorea_labels_ind==chorea_level).flatten() * (valid_chorea == is_valid).flatten())[0]
+                indices = np.where((chorea_labels_ind==chorea_level).flatten() * (valid_chorea1 == is_valid).flatten())[0]
                 gait_predictions_sel = gait_predictions[indices]
                 gait_labels_sel = gait_labels_ind[indices]
                 if len(gait_labels_sel) > 0:
@@ -75,6 +77,7 @@ def generate_confusion_matrix_per_chorea_lvl(gait_predictions, gait_labels, chor
                         prefix2=f'{chorea_level}'
                     recall = confusion_matrix(gait_labels_sel, gait_predictions_sel, prefix1=prefix1, prefix2=prefix2+prefix)
                     recall_dict[prefix2+prefix] = recall
+            
         else:
             gait_predictions_sel = gait_predictions[valid_ind]
             gait_labels_sel = gait_labels_ind[valid_ind]
@@ -84,6 +87,46 @@ def generate_confusion_matrix_per_chorea_lvl(gait_predictions, gait_labels, chor
             else:
                 prefix2=f'no_valid_chorea'
             recall_dict[prefix2+prefix] = confusion_matrix(gait_labels_sel, gait_predictions_sel, prefix1=prefix1, prefix2=f'no_valid_chorea'+prefix)
+
+    ## plot chorea cm 
+    valid_chorea_f = valid_chorea.flatten()
+    valid_chorea_ind = np.where(valid_chorea_f)[0]
+    chorea_labels_valid = chorea_labels_ind.flatten()[valid_chorea_ind]
+    chorea_predictions_valid = chorea_predictions.flatten()[valid_chorea_ind]
+    cm = metrics.confusion_matrix(chorea_labels_valid, chorea_predictions_valid, labels=[0, 1, 2, 3, 4, 5])
+    report = classification_report(chorea_labels_valid, chorea_predictions_valid, labels=[0, 1, 2, 3, 4, 5], output_dict=True)
+
+    precision = report["macro avg"]["precision"]
+    recall = report["macro avg"]["recall"]
+    f1_score = report["macro avg"]["f1-score"]
+
+    summary_text = f"Precision: {precision:.2f}, Recall: {recall:.2f}, F1 Score: {f1_score:.2f}"
+
+    accuracy_per_level = {}
+    for i in range(len(cm)):
+        true_positives = cm[i, i]
+        total_instances_of_class = cm[i, :].sum()  # Sum of the entire row for that class
+        accuracy_per_level[i] = true_positives / total_instances_of_class if total_instances_of_class > 0 else 0
+
+    fig, ax = plt.subplots(1, 2, figsize=(14, 6))
+
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", xticklabels=[0, 1, 2, 3, 4], yticklabels=[0, 1, 2, 3, 4], ax=ax[0])
+    ax[0].set_xlabel("Predicted Level")
+    ax[0].set_ylabel("True Level")
+    ax[0].set_title("Confusion Matrix for Chorea Level Prediction")
+    fig.text(0.5, 0.92, summary_text, fontsize=12, ha="left")
+
+    levels = list(accuracy_per_level.keys())
+    accuracies = list(accuracy_per_level.values())
+    ax[1].bar(levels, accuracies, color='skyblue')
+    ax[1].set_xlabel("Chorea Level")
+    ax[1].set_ylabel("Accuracy")
+    ax[1].set_title("Accuracy per Chorea Level")
+    ax[1].set_ylim(0, 1.1)
+    
+    plt.savefig(os.path.join(VIZUALIZE_DIR,f'confusion_matrix_chorea_level_valid_chorea_classification_{prefix1}_.png'))
+    plt.close('all')
+
     return recall_dict
 
 def auc_and_ci(labels,probs):

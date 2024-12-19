@@ -91,7 +91,7 @@ def generate_confusion_matrix_per_chorea_lvl(gait_predictions, gait_labels, chor
     ## plot chorea cm 
     valid_chorea_f = valid_chorea.flatten()
     valid_chorea_ind = np.where(valid_chorea_f)[0]
-    chorea_labels_valid = chorea_labels_ind.flatten()[valid_chorea_ind]
+    chorea_labels_valid = chorea_labels.flatten()[valid_chorea_ind]
     chorea_predictions_valid = chorea_predictions.flatten()[valid_chorea_ind]
     cm = metrics.confusion_matrix(chorea_labels_valid, chorea_predictions_valid, labels=[0, 1, 2, 3, 4, 5])
     report = classification_report(chorea_labels_valid, chorea_predictions_valid, labels=[0, 1, 2, 3, 4, 5], output_dict=True)
